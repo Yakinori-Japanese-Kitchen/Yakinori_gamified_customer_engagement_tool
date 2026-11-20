@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yakinori Japanese Challenge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@500;700;900&family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+/* ===== SETTINGS: change these to suit the restaurant ===== */
+const SETTINGS = {
+  wordsPerLesson: 8,           // words taught in the lesson
+  questionsPerGame: 5,         // quiz questions (picked from the lesson words)
+  winScore: 4,                 // correct answers needed to win
+  maxAttempts: 2,              // quiz chances per phone per day
+  secondsPerQuestion: 20,
+  rewardTitle: "10% off drinks & desserts",
+  rewardSmall: "Valid today, one reward per phone. Show this screen to your server before paying. One reward per table. Not combinable with other offers.",
+  staffPin: "2580",            // CHANGE THIS before going live
+  codeSalt: "yakinori-selly",
+  // Paste your Google Apps Script web-app URL here to record events (see README). Leave "" to switch logging off.
+  logUrl: ""
+};
+</script>
+<style>
+:root{
+  --ink:#f4f4ef; --paper:#000; --paper2:#151a0c; --red:#adcc54; --red2:#82993f;
+  --gold:#e27739; --green:#adcc54; --muted:#a4a69c; --line:#2f3424; --orange:#e27739;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:"Fredoka",system-ui,sans-serif;background:var(--paper);color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(circle at 100% 0,rgba(173,204,84,.10) 0 160px,transparent 161px),
+  radial-gradient(circle at 0 100%,rgba(226,119,57,.12) 0 200px,transparent 201px);}
+.wrap{max-width:460px;margin:0 auto;min-height:100%;padding:22px 20px 40px;display:flex;flex-direction:column}
+.jp{font-family:"Noto Sans JP",sans-serif}
+header{display:flex;justify-content:center;margin-bottom:10px}
+.logo{width:220px;max-width:70%;height:auto}
+.cats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0 16px}
+.cat{font:inherit;color:var(--ink);background:#0f120a;border:1.5px solid var(--line);border-radius:16px;padding:16px 10px;cursor:pointer;text-align:center}
+.cat .e{font-size:30px;display:block}
+.cat b{display:block;font-size:17px;margin-top:4px}
+.cat small{color:var(--muted);font-size:12.5px}
+.cat.sel{border-color:var(--green);background:#1d250d;box-shadow:0 0 0 3px rgba(173,204,84,.25)}
+.chip{display:inline-block;font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;background:rgba(226,119,57,.15);color:var(--orange);margin-bottom:6px}
+.brand{font-family:"Noto Sans JP",sans-serif;font-weight:900;letter-spacing:.08em;font-size:15px}
+.brand span{color:var(--red)}
+.hanko{width:38px;height:38px;border-radius:6px;background:var(--red);color:#fff;display:grid;place-items:center;
+  font-family:"Noto Sans JP",sans-serif;font-weight:900;font-size:18px;transform:rotate(-6deg);box-shadow:0 2px 0 var(--red2)}
+.screen{display:none;flex:1;flex-direction:column;animation:in .35s ease}
+.screen.on{display:flex}
+@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+h1{font-family:"Noto Sans JP",sans-serif;font-weight:900;font-size:34px;line-height:1.1;margin:8px 0 10px}
+h1 em{font-style:normal;color:var(--green)}
+.lead{color:var(--muted);font-size:16px;line-height:1.5}
+.bigjp{font-family:"Noto Sans JP",sans-serif;font-size:72px;font-weight:900;color:var(--red);line-height:1;margin:22px 0 4px}
+.prize{margin:22px 0;border:1.5px dashed var(--orange);border-radius:14px;padding:16px;background:rgba(226,119,57,.08)}
+.prize b{display:block;font-size:18px;margin-bottom:4px}
+.prize small{color:var(--muted);font-size:13px}
+.rules{list-style:none;margin:6px 0 22px;font-size:15px;color:var(--muted)}
+.rules li{padding:6px 0;border-bottom:1px solid var(--line);display:flex;gap:10px}
+.rules li span{color:var(--orange);font-weight:700}
+label{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+input{width:100%;font:inherit;font-size:17px;padding:13px 14px;border:1.5px solid var(--line);border-radius:12px;background:#11140b;color:var(--ink);margin:6px 0 14px}
+input:focus{outline:none;border-color:var(--red)}
+.btn{font:inherit;font-weight:700;font-size:17px;border:0;border-radius:14px;padding:16px;width:100%;cursor:pointer;
+  background:var(--green);color:#000;box-shadow:0 3px 0 var(--red2);transition:transform .08s}
+.btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--red2)}
+.btn.ghost{background:transparent;color:var(--ink);box-shadow:none;border:1.5px solid var(--line)}
+.btn[disabled]{opacity:.45}
+.spacer{flex:1}
+/* quiz */
+.topbar{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.dots{display:flex;gap:6px;flex:1}
+.dot{height:6px;flex:1;border-radius:3px;background:var(--line)}
+.dot.ok{background:var(--green)} .dot.no{background:var(--red)} .dot.now{background:var(--ink)} .dot.no{background:var(--orange)}
+.timer{font-variant-numeric:tabular-nums;font-weight:700;font-size:15px;min-width:42px;text-align:right}
+.timer.low{color:var(--orange)}
+.qnum{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.qjp{font-family:"Noto Sans JP",sans-serif;font-size:40px;font-weight:900;margin:14px 0 2px;line-height:1.2}
+.qrom{font-size:20px;font-weight:700;color:var(--orange);margin-bottom:6px}
+.qtext{font-size:17px;color:var(--muted);margin-bottom:20px}
+.opts{display:grid;gap:10px}
+.opt{font:inherit;font-size:17px;text-align:left;padding:15px 16px;border-radius:12px;border:1.5px solid var(--line);
+  background:#0f120a;cursor:pointer;color:var(--ink);transition:border-color .15s,background .15s}
+.opt:hover{border-color:var(--green)}
+.opt.right{background:#2a3613;color:#fff;border-color:var(--green);font-weight:700}
+.opt.wrong{background:#3a1d0f;border-color:var(--orange)}
+.opt[disabled]{cursor:default}
+.fact{margin-top:16px;padding:14px;border-radius:12px;background:var(--paper2);font-size:15px;line-height:1.45;display:none}
+.fact.on{display:block}
+.fact b{color:var(--ink)}
+#nextBtn{margin-top:16px;display:none}
+/* result */
+.score{font-family:"Noto Sans JP",sans-serif;font-size:64px;font-weight:900;margin:10px 0 0}
+.ticket{margin:18px 0;background:#f4f4ef;color:#111;border-radius:18px;padding:20px;position:relative;
+  box-shadow:0 10px 30px -12px rgba(0,0,0,.25);border-top:8px solid var(--orange);overflow:hidden}
+.ticket::after{content:"";position:absolute;right:-40px;top:-40px;width:120px;height:120px;border-radius:50%;background:rgba(184,50,42,.07)}
+.ticket .t1{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#6a6a60}
+.ticket .grid2 div span{color:#6a6a60}
+.ticket .t2{font-size:22px;font-weight:700;margin:4px 0 14px}
+.code{font-family:"Noto Sans JP",sans-serif;font-size:30px;font-weight:900;letter-spacing:.06em;color:var(--orange)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;font-size:14px}
+.grid2 div span{display:block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.grid2 div b{font-size:16px}
+.live{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:14px;font-weight:700;color:#5f7a1d}
+.pulse{width:10px;height:10px;border-radius:50%;background:#7fa22a;animation:p 1.2s infinite}
+@keyframes p{0%{box-shadow:0 0 0 0 rgba(47,122,85,.6)}100%{box-shadow:0 0 0 12px rgba(47,122,85,0)}}
+.stamp{position:absolute;inset:0;display:none;place-items:center;background:rgba(255,255,255,.75)}
+.stamp div{border:4px solid var(--orange);color:var(--orange);font-weight:900;font-size:30px;padding:6px 16px;border-radius:8px;transform:rotate(-12deg);letter-spacing:.1em}
+.ticket.used .stamp{display:grid}
+.ticket.used .live{display:none}
+.fine{font-size:12.5px;color:var(--muted);line-height:1.45;margin-bottom:16px}
+.foot{margin-top:24px;text-align:center;font-size:12px;color:var(--muted)}
+.foot button{background:none;border:0;font:inherit;color:var(--muted);text-decoration:underline;cursor:pointer}
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;place-items:center;padding:20px;z-index:10}
+.modal.on{display:grid}
+.card{background:#12150c;border:1px solid var(--line);border-radius:18px;padding:22px;width:100%;max-width:380px}
+.card h3{font-family:"Noto Sans JP",sans-serif;font-size:22px;margin-bottom:8px}
+.card p{color:var(--muted);font-size:14px;margin-bottom:12px;line-height:1.45}
+.err{color:var(--orange);font-size:14px;min-height:18px;margin:-6px 0 8px}
+.row{display:flex;gap:10px}
+.staffcode{font-family:"Noto Sans JP",sans-serif;font-size:34px;font-weight:900;color:var(--red);margin:6px 0 14px;letter-spacing:.06em}
+.shake{animation:sh .3s}
+@keyframes sh{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+
+/* ---- v3 additions ---- */
+.topnav{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:44px 1fr 44px;align-items:center;
+  margin:-22px -20px 12px;padding:10px 12px;background:rgba(0,0,0,.88);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
+.topnav .logo{width:150px;justify-self:center}
+.navbtn{width:44px;height:44px;border-radius:12px;border:1.5px solid var(--line);background:#0f120a;color:var(--ink);
+  font:inherit;font-size:22px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.navbtn.hide{visibility:hidden}
+.drawer{position:fixed;inset:0;z-index:20;display:none}
+.drawer.on{display:block}
+.drawer .shade{position:absolute;inset:0;background:rgba(0,0,0,.7)}
+.drawer .panel{position:absolute;top:0;right:0;bottom:0;width:min(300px,84vw);background:#0c0f07;border-left:1px solid var(--line);
+  padding:18px;display:flex;flex-direction:column;gap:10px;animation:slide .22s ease}
+@keyframes slide{from{transform:translateX(100%)}to{transform:none}}
+.panel h3{font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.menuitem{font:inherit;font-size:18px;text-align:left;color:var(--ink);background:#141809;border:1.5px solid var(--line);border-radius:14px;
+  padding:14px;cursor:pointer;display:flex;gap:12px;align-items:center}
+.menuitem small{display:block;color:var(--muted);font-size:13px}
+.menuitem.sel{border-color:var(--green)}
+.menuitem .e{font-size:26px}
+.attempts{margin-top:auto;padding:12px;border-radius:12px;background:rgba(226,119,57,.1);color:var(--orange);font-size:14px;font-weight:600;text-align:center}
+.lessoncard{background:#0f120a;border:1.5px solid var(--line);border-radius:20px;padding:24px 20px;text-align:center;margin:8px 0 14px;animation:in .3s ease}
+.lessoncard .ljp{font-family:"Noto Sans JP",sans-serif;font-size:46px;font-weight:900;line-height:1.2}
+.lessoncard .lrom{font-size:24px;font-weight:700;color:var(--orange);margin:6px 0 14px}
+.lessoncard .lmean{font-size:22px;font-weight:600;color:var(--green);padding:12px;border-radius:12px;background:#1a210c}
+.lessoncard .lfact{font-size:15px;color:var(--muted);margin-top:14px;line-height:1.45}
+.row2{display:grid;grid-template-columns:1fr 2fr;gap:10px}
+.pill{display:inline-block;font-size:13px;font-weight:600;padding:4px 12px;border-radius:99px;background:#1a210c;color:var(--green)}
+.lockicon{font-size:64px;margin:20px 0 6px}
+.fb{display:none;margin-top:22px;padding:16px;border:1.5px solid var(--line);border-radius:16px;background:#0c0f07}
+.fbq{font-weight:600;font-size:17px;margin-bottom:10px;text-align:center}
+.fbrow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.fbrow button{font:inherit;font-size:30px;padding:10px 4px;border-radius:12px;border:1.5px solid var(--line);background:#141809;color:var(--ink);cursor:pointer}
+.fbrow button small{display:block;font-size:12px;color:var(--muted)}
+.fbrow button.sel{border-color:var(--green);background:#1d250d}
+.fb textarea{width:100%;font:inherit;font-size:15px;margin:12px 0 8px;padding:10px;border-radius:10px;border:1.5px solid var(--line);background:#11140b;color:var(--ink);resize:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="topnav">
+    <button class="navbtn hide" id="backBtn" aria-label="Back">‹</button>
+    <img class="logo" src="data:image/png;base64,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" alt="Yakinori Japanese Kitchen">
+    <button class="navbtn" id="menuBtn" aria-label="Choose category">☰</button>
+  </nav>
+
+  <!-- 1. WELCOME -->
+  <section class="screen on" id="sStart">
+    <div class="bigjp" style="color:var(--orange)">日本語</div>
+    <h1>The Japanese<br><em>Table Challenge</em></h1>
+    <p class="lead">Learn some Japanese words, then take a 5-question quiz. Get <b class="winTxt">4</b> right and you win!</p>
+    <div class="prize"><b>🍵 Win: <span class="prizeTxt"></span></b><small>Show your winning screen to your server.</small></div>
+    <ul class="rules">
+      <li><span>1</span>Pick your group: Family, Friends, Couples or Kids</li>
+      <li><span>2</span>Learn the words in a quick lesson</li>
+      <li><span>3</span>Take the quiz: <b class="maxTxt" style="display:contents">2</b>&nbsp;chances only</li>
+    </ul>
+    <label for="nameIn">Your first name</label>
+    <input id="nameIn" maxlength="20" placeholder="e.g. Priya" autocomplete="off">
+    <div class="spacer"></div>
+    <button class="btn" id="startBtn" disabled>Next → choose your group</button>
+  </section>
+
+  <!-- 2. CATEGORIES -->
+  <section class="screen" id="sCats">
+    <div class="qnum">Step 1 of 3</div>
+    <h1>Who's <em>playing?</em></h1>
+    <p class="lead" style="margin-bottom:14px">Each group gets its own lesson and quiz.</p>
+    <div class="cats" id="catGrid"></div>
+    <div class="attempts" id="attemptsCats"></div>
+  </section>
+
+  <!-- 3. LESSON -->
+  <section class="screen" id="sLesson">
+    <div><span class="chip" id="lessonChip"></span></div>
+    <div class="qnum" id="lessonNum">Step 2 of 3 · Word 1 of 8</div>
+    <div class="topbar" style="margin:10px 0 0"><div class="dots" id="lessonDots"></div></div>
+    <div class="lessoncard" id="lessonCard">
+      <div class="ljp" id="lJp"></div>
+      <div class="lrom" id="lRom"></div>
+      <div class="lmean" id="lMean"></div>
+      <div class="lfact" id="lFact"></div>
+    </div>
+    <p class="lead" style="font-size:14px;text-align:center">Tip: say each word out loud. The quiz uses these words!</p>
+    <div class="spacer"></div>
+    <div class="row2" style="margin-top:14px">
+      <button class="btn ghost" id="lPrev">‹ Prev</button>
+      <button class="btn" id="lNext">Next word →</button>
+    </div>
+  </section>
+
+  <!-- 4. QUIZ -->
+  <section class="screen" id="sQuiz">
+    <div class="topbar"><div class="dots" id="dots"></div><div class="timer" id="timer">20s</div></div>
+    <div><span class="chip" id="catChip"></span> <span class="pill" id="tryChip"></span></div>
+    <div class="qnum" id="qnum" style="margin-top:6px">Question 1 of 5</div>
+    <div class="qjp" id="qjp"></div>
+    <div class="qrom" id="qrom"></div>
+    <div class="qtext" id="qtext"></div>
+    <div class="opts" id="opts"></div>
+    <div class="fact" id="fact"></div>
+    <button class="btn" id="nextBtn">Next →</button>
+  </section>
+
+  <!-- 5a. WIN -->
+  <section class="screen" id="sWin">
+    <div class="qnum">Omedetō! · おめでとう</div>
+    <h1>You <em>won!</em></h1>
+    <div class="score" id="winScore">5/5</div>
+    <div class="ticket" id="ticket">
+      <div class="t1">Reward</div>
+      <div class="t2" id="ticketPrize"></div>
+      <div class="t1">Today's code</div>
+      <div class="code" id="ticketCode"></div>
+      <div class="grid2">
+        <div><span>Name</span><b id="tName"></b></div>
+        <div><span>Group</span><b id="tTable"></b></div>
+        <div><span>Won at</span><b id="tWon"></b></div>
+        <div><span>Time now</span><b id="tNow"></b></div>
+      </div>
+      <div class="live"><div class="pulse"></div>Live ticket: not a screenshot</div>
+      <div class="stamp"><div>REDEEMED</div></div>
+    </div>
+    <p class="fine" id="fine"></p>
+    <button class="btn" id="redeemBtn">Staff: redeem</button>
+  </section>
+
+  <!-- 5b. LOSE -->
+  <section class="screen" id="sLose">
+    <div class="qnum">Zannen · ざんねん</div>
+    <h1>So <em>close!</em></h1>
+    <div class="score" id="loseScore">3/5</div>
+    <p class="lead" style="margin:10px 0 14px">You needed <b class="winTxt">4</b> to win.</p>
+    <div class="attempts" id="loseAttempts" style="margin:0 0 16px"></div>
+    <button class="btn" id="retryBtn">Try again: review the lesson</button>
+    <p class="lead" style="margin:18px 0 8px">Words from your quiz:</p>
+    <div id="learnt" style="display:grid;gap:8px"></div>
+  </section>
+
+  <!-- 5c. LOCKED -->
+  <section class="screen" id="sLocked">
+    <div class="lockicon">🔒</div>
+    <h1>No chances <em>left</em></h1>
+    <p class="lead">You've used both of today's quiz chances on this phone. Thanks for playing! Come back on your next visit: <b>ganbatte!</b> (頑張って, “you can do it!”)</p>
+    <p class="lead" style="margin:18px 0 8px">Words from your last quiz:</p>
+    <div id="learnt2" style="display:grid;gap:8px"></div>
+  </section>
+
+  <div class="fb" id="fb">
+    <div class="fbq">Did you enjoy it?</div>
+    <div class="fbrow" id="fbRate">
+      <button data-r="1">😐<small>Meh</small></button><button data-r="2">🙂<small>Fun</small></button><button data-r="3">😍<small>Loved it</small></button>
+    </div>
+    <div id="fbMore" style="display:none">
+      <textarea id="fbText" maxlength="300" rows="2" placeholder="Any idea to make it better? (optional)"></textarea>
+      <button class="btn ghost" id="fbSend" style="padding:12px">Send</button>
+    </div>
+    <div id="fbThanks" style="display:none;text-align:center;color:var(--green);font-weight:600">ありがとう! Thank you 🙏</div>
+  </div>
+  <div class="foot"><button id="staffLink">Staff</button></div>
+</div>
+
+<!-- Category menu (hamburger) -->
+<div class="drawer" id="drawer">
+  <div class="shade" id="shade"></div>
+  <div class="panel">
+    <h3>Choose your group <button class="navbtn" id="closeMenu" aria-label="Close">✕</button></h3>
+    <div id="menuList" style="display:grid;gap:10px"></div>
+    <div class="attempts" id="attemptsMenu"></div>
+  </div>
+</div>
+
+<!-- Confirm leave quiz -->
+<div class="modal" id="leaveModal">
+  <div class="card">
+    <h3>Leave the quiz?</h3>
+    <p>If you leave now, this quiz still counts as one of your <b class="maxTxt">2</b> chances.</p>
+    <div class="row"><button class="btn ghost" id="leaveNo">Keep playing</button><button class="btn" id="leaveYes">Leave</button></div>
+  </div>
+</div>
+<!-- PIN modal -->
+<div class="modal" id="pinModal">
+  <div class="card" id="pinCard">
+    <h3 id="pinTitle">Staff only</h3>
+    <p id="pinMsg">Enter the staff PIN.</p>
+    <input id="pinIn" type="password" inputmode="numeric" maxlength="8" placeholder="PIN">
+    <div class="err" id="pinErr"></div>
+    <div class="row"><button class="btn ghost" id="pinCancel">Cancel</button><button class="btn" id="pinOk">OK</button></div>
+  </div>
+</div>
+<!-- Staff panel -->
+<div class="modal" id="staffModal">
+  <div class="card">
+    <h3>Staff check</h3>
+    <p>Today's winning code is:</p>
+    <div class="staffcode" id="staffCode"></div>
+    <p>A real win shows this exact code, today's date, and a clock that keeps ticking. Tap <b>Staff: redeem</b> on the customer's phone after applying the discount.</p>
+    <p>Reset gives this phone its 2 chances back (e.g. for testing).</p>
+    <div class="row"><button class="btn ghost" id="resetBtn">Reset phone</button><button class="btn" id="staffClose">Close</button></div>
+  </div>
+</div>
+
+<script>
+const B = {
+ itadaki:{jp:"いただきます", r:"Itadakimasu", q:"When do you say this?", a:"Just before you start eating", w:["When leaving the restaurant","When ordering a drink","When the bill arrives"], f:"It literally means “I humbly receive”, a thank-you to everyone who made the meal."},
+ gochi:{jp:"ごちそうさまでした", r:"Gochisōsama deshita", q:"When do you say this?", a:"After finishing your meal", w:["Before eating","When you sit down","When you sneeze"], f:"A thank-you for the “feast”. Try it on your server tonight!"},
+ arigato:{jp:"ありがとう", r:"Arigatō", q:"What does this mean?", a:"Thank you", w:["Good morning","See you later","Excuse me"], f:"Add “gozaimasu” to make it extra polite."},
+ oishii:{jp:"おいしい！", r:"Oishii!", q:"What does this mean?", a:"Delicious!", w:["Too spicy!","I'm full!","More please!"], f:"Say it with a big smile when your sushi arrives."},
+ kanpai:{jp:"乾杯！", r:"Kanpai!", q:"What do you say this with?", a:"Raised glasses: “Cheers!”", w:["A bow: “Goodbye!”","A handshake: “Nice to meet you!”","A wave: “Over here!”"], f:"It means “dry cup”. Works with any drink, even green tea!"},
+ sumimasen:{jp:"すみません", r:"Sumimasen", q:"In a restaurant, this is used to…", a:"Politely get a server's attention", w:["Ask for the bill","Say the food is cold","Order dessert"], f:"It also means “sorry” or “excuse me”. A very useful word."},
+ okaikei:{jp:"お会計お願いします", r:"Okaikei onegaishimasu", q:"What are you asking for?", a:"The bill, please", w:["More water, please","A table for two","The toilet, please"], f:"“Onegaishimasu” means please. It works for almost any request."},
+ mizu:{jp:"水", r:"Mizu", q:"What is this?", a:"Water", w:["Rice","Soy sauce","Green tea"], f:"In Japan, free iced water usually arrives as soon as you sit down."},
+ ocha:{jp:"お茶", r:"Ocha", q:"What is this drink?", a:"Green tea", w:["Coffee","Orange juice","Milk"], f:"The “o” at the start is a polite prefix, showing respect for the tea!"},
+ sake:{jp:"鮭", r:"Sake (sha-keh)", q:"On a sushi menu, this means…", a:"Salmon", w:["Tuna","Rice wine","Cucumber"], f:"Same sound as rice-wine “sake”, but a different kanji. Sushi chefs often say “sāmon”."},
+ maguro:{jp:"まぐろ", r:"Maguro", q:"Which fish is this?", a:"Tuna", w:["Salmon","Eel","Mackerel"], f:"The fattiest belly cut is called “toro”, the most prized part."},
+ ebi:{jp:"えび", r:"Ebi", q:"What is this?", a:"Prawn", w:["Crab","Octopus","Squid"], f:"Ebi tempura = battered, fried prawn. Crunchy!"},
+ tamago:{jp:"たまご", r:"Tamago", q:"What is this?", a:"Egg", w:["Tofu","Seaweed","Ginger"], f:"Tamago sushi is a sweet rolled omelette."},
+ gari:{jp:"がり", r:"Gari", q:"What is this sushi side?", a:"Pickled ginger", w:["Wasabi","Soy sauce","Seaweed salad"], f:"Eat it between pieces to refresh your mouth, not on top of the sushi."},
+ hashi:{jp:"箸", r:"Hashi", q:"What are these?", a:"Chopsticks", w:["Napkins","Small plates","Spoons"], f:"Never stand them upright in your rice. That's only done at funerals."},
+ omakase:{jp:"お任せ", r:"Omakase", q:"Ordering “omakase” means…", a:"“I'll leave it to you”: chef's choice", w:["Extra spicy","Takeaway, please","Without fish"], f:"It's a sign of trust in the chef."},
+ gohan:{jp:"ご飯", r:"Gohan", q:"What does this mean?", a:"Rice, and also “a meal”", w:["Soup","Fish","Dessert"], f:"“Asa-gohan” (morning rice) simply means breakfast."},
+ konnichiwa:{jp:"こんにちは", r:"Konnichiwa", q:"What does this mean?", a:"Hello", w:["Goodbye","Thank you","Good night"], f:"In the morning, say “ohayō” instead."},
+ irasshai:{jp:"いらっしゃいませ", r:"Irasshaimase", q:"Who says this, and when?", a:"Staff, welcoming you as you come in", w:["Customers, when leaving","The chef, when food is ready","Everyone, before eating"], f:"No need to reply. A smile or nod is perfect."},
+ karai:{jp:"辛い", r:"Karai", q:"What does this describe?", a:"Spicy", w:["Sweet","Cold","Crunchy"], f:"Wasabi is very “karai”. Go easy!"},
+ amai:{jp:"甘い", r:"Amai", q:"What does this describe?", a:"Sweet", w:["Salty","Sour","Bitter"], f:"Perfect word for dessert time 🍡"},
+ mochi:{jp:"餅", r:"Mochi", q:"What is mochi?", a:"Soft, chewy rice cake", w:["Fried noodles","Seaweed cracker","Fish soup"], f:"Mochi ice cream is a favourite Japanese dessert."},
+ // family
+ kazoku:{jp:"家族", r:"Kazoku", q:"What does this mean?", a:"Family", w:["Friends","Neighbours","Restaurant"], f:"Japanese families often share lots of small dishes in the middle of the table, just like here!"},
+ okaasan:{jp:"お母さん", r:"Okāsan", q:"Who is this?", a:"Mum", w:["Grandma","Sister","Teacher"], f:"Dad is “otōsan”. Point and try them out!"},
+ obaachan:{jp:"おばあちゃん", r:"Obāchan", q:"Who is this?", a:"Grandma", w:["Aunt","Mum","Baby"], f:"Grandad is “ojīchan”. Careful: a short “a” in “obachan” means auntie!"},
+ // friends
+ tomodachi:{jp:"友達", r:"Tomodachi", q:"What does this mean?", a:"Friend", w:["Colleague","Stranger","Brother"], f:"Your best friend is your “shinyū”."},
+ sugoi:{jp:"すごい！", r:"Sugoi!", q:"When would you shout this?", a:"When something is amazing", w:["When you're bored","When you're sorry","When you're leaving"], f:"Add “nē” at the end (“sugoi nē!”) to say “isn't it amazing!”"},
+ onakasuita:{jp:"お腹すいた", r:"Onaka suita", q:"What are you telling your friends?", a:"“I'm hungry!”", w:["“I'm tired!”","“I'm full!”","“I'm cold!”"], f:"It literally means “my stomach is empty”. Perfect timing!"},
+ matane:{jp:"またね", r:"Mata ne", q:"What does this mean?", a:"See you later!", w:["Welcome!","Let's eat!","Good luck!"], f:"A casual goodbye between friends. Use “sayōnara” for longer goodbyes."},
+ // couples
+ daisuki:{jp:"大好き", r:"Daisuki", q:"What does this mean?", a:"I really love it / you", w:["I'm very hungry","Very expensive","Big portion"], f:"It works for people and food! “Sushi daisuki!”"},
+ kawaii:{jp:"かわいい", r:"Kawaii", q:"What does this mean?", a:"Cute", w:["Scary","Tasty","Tired"], f:"Japan's favourite compliment, for people, pets and even desserts."},
+ kirei:{jp:"きれい", r:"Kirei", q:"What does this mean?", a:"Beautiful / pretty", w:["Busy","Funny","Hungry"], f:"It also means “clean”. A beautiful sushi plate is “kirei” too!"},
+ issho:{jp:"一緒に", r:"Issho ni", q:"What does this mean?", a:"Together", w:["Alone","Tomorrow","Quickly"], f:"“Issho ni tabeyō” means “let's eat together”."},
+ kokoro:{jp:"心", r:"Kokoro", q:"What does this mean?", a:"Heart / mind", w:["Moon","Smile","Flower"], f:"Japanese has one word for the heart that feels and the mind that thinks."},
+ // kids
+ neko:{jp:"ねこ", r:"Neko", q:"Which animal is this?", a:"Cat 🐱", w:["Dog 🐶","Rabbit 🐰","Fish 🐟"], f:"Japanese cats say “nyā” instead of “meow”!"},
+ inu:{jp:"いぬ", r:"Inu", q:"Which animal is this?", a:"Dog 🐶", w:["Cat 🐱","Bird 🐦","Bear 🐻"], f:"Japanese dogs say “wan wan”!"},
+ sakana:{jp:"さかな", r:"Sakana", q:"What is this?", a:"Fish 🐟", w:["Bird 🐦","Frog 🐸","Snake 🐍"], f:"Lots of the sushi here is made with “sakana”."},
+ aka:{jp:"あか", r:"Aka", q:"Which colour is this?", a:"Red 🔴", w:["Blue 🔵","Green 🟢","Yellow 🟡"], f:"The red circle on Japan's flag is the sun!"},
+ ichi:{jp:"一", r:"Ichi", q:"Which number is this?", a:"1", w:["3","5","10"], f:"Ichi, ni, san = 1, 2, 3. Count your sushi!"},
+ san:{jp:"三", r:"San", q:"Which number is this?", a:"3", w:["1","4","8"], f:"See the three lines? That's how you write 3!"},
+ hai:{jp:"はい", r:"Hai", q:"What does this mean?", a:"Yes", w:["No","Hello","Bye"], f:"“No” is “iie”."},
+ usagi:{jp:"うさぎ", r:"Usagi", q:"Which animal is this?", a:"Rabbit 🐰", w:["Mouse 🐭","Cat 🐱","Monkey 🐵"], f:"In Japan people say there's a rabbit making mochi on the moon!"}
+};
+const CATS = {
+ family:{label:"👨‍👩‍👧 Family", keys:["itadaki","gochi","kazoku","okaasan","obaachan","hashi","gohan","ocha","sumimasen","okaikei","irasshai","tamago","arigato"]},
+ friends:{label:"🙌 Friends", keys:["kanpai","tomodachi","sugoi","onakasuita","matane","oishii","karai","omakase","maguro","sake","gari","ebi","sumimasen"]},
+ couples:{label:"💞 Couples", keys:["daisuki","kawaii","kirei","issho","kokoro","amai","mochi","kanpai","oishii","omakase","ocha","gochi"]},
+ kids:{label:"🧒 Kids", keys:["neko","inu","sakana","aka","ichi","san","hai","usagi","konnichiwa","arigato","oishii","tamago","mizu"]}
+};
+
+CATS.family.blurb="Table manners & home words"; CATS.friends.blurb="Fun phrases & food";
+CATS.couples.blurb="Sweet words for two"; CATS.kids.blurb="Animals, colours, numbers";
+
+const $=id=>document.getElementById(id);
+const store={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}, del(k){try{localStorage.removeItem(k)}catch(e){}}};
+const todayKey=()=>new Date().toLocaleDateString("en-CA");
+const fmtTime=d=>d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+const fmtDate=d=>d.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"});
+const WORDS=["SAKURA","FUJI","KOI","MOCHI","SUSHI","UMAMI","WASABI","NORI","YUZU","MATCHA","RAMEN","TOFU","MISO","KAPPA","SHOYU","GOMA"];
+function dailyCode(d){let h=2166136261;const s=d+"|"+SETTINGS.codeSalt;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0}
+  return WORDS[h%WORDS.length]+"-"+String(10+(h>>>8)%90)}
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+const catName=c=>CATS[c].label.split(" ").slice(1).join(" ");
+const catEmoji=c=>CATS[c].label.split(" ")[0];
+
+// ---- per-phone daily state
+const KEY="yk_state_v3";
+function load(){const s=store.get(KEY);return (s&&s.date===todayKey())?s:{date:todayKey(),attempts:0,win:null,last:null,name:"",fbDone:false,
+  sid:Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4)}}
+let S=load(); const save=()=>store.set(KEY,S);
+const left=()=>Math.max(0,SETTINGS.maxAttempts-S.attempts);
+
+// ---- anonymous event logging (no names are sent)
+const DEVICE=/Mobi|Android|iPhone/i.test(navigator.userAgent)?"mobile":(/iPad|Tablet/i.test(navigator.userAgent)?"tablet":"desktop");
+function log(event,data={}){
+  if(!SETTINGS.logUrl) return;
+  const body=JSON.stringify(Object.assign({ts:new Date().toISOString(),session:S.sid,event,category:cat||"",screen:current,device:DEVICE},data));
+  try{fetch(SETTINGS.logUrl,{method:"POST",mode:"no-cors",keepalive:true,headers:{"Content-Type":"text/plain;charset=utf-8"},body}).catch(()=>{})}catch(e){}
+}
+
+document.querySelectorAll(".winTxt").forEach(e=>e.textContent=SETTINGS.winScore);
+document.querySelectorAll(".maxTxt").forEach(e=>e.textContent=SETTINGS.maxAttempts);
+document.querySelectorAll(".prizeTxt").forEach(e=>e.textContent=SETTINGS.rewardTitle);
+
+// ---- navigation with history (for Back)
+let lessonT0=0, qT0=0, current="sStart", hist=[], cat=null, lesson=null, li=0, game=null, tick=null, liveTick=null;
+function go(id,push=true){
+  if(push && current!==id) hist.push(current);
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("on")); $(id).classList.add("on");
+  current=id; window.scrollTo(0,0); paintNav();
+}
+function paintNav(){
+  $("backBtn").classList.toggle("hide", current==="sStart" || current==="sWin" || current==="sLocked" || hist.length===0);
+  const t=left()+" of "+SETTINGS.maxAttempts+" quiz chance"+(SETTINGS.maxAttempts>1?"s":"")+" left today";
+  $("attemptsCats").textContent=S.win?"You've already won today 🎉":t; $("attemptsMenu").textContent=S.win?"You've already won today 🎉":t;
+}
+$("backBtn").onclick=()=>{ log("back_click");
+  if(current==="sQuiz"){ $("leaveModal").classList.add("on"); pendingLeave=()=>{stopQuiz(); afterQuizExit("sLesson")}; return; }
+  const prev=hist.pop(); if(prev) go(prev,false);
+};
+let pendingLeave=null;
+$("leaveNo").onclick=()=>$("leaveModal").classList.remove("on");
+$("leaveYes").onclick=()=>{$("leaveModal").classList.remove("on"); if(game) log("quiz_abandon",{attempt:game.attempt,word:"q"+(game.i+1)}); pendingLeave&&pendingLeave();};
+function afterQuizExit(target){ // quiz abandoned: attempt already counted
+  if(left()===0){ showLocked(); return; }
+  hist=hist.filter(x=>x!=="sQuiz"); go(target,false); paintNav();
+}
+
+// ---- guard: where can this phone go?
+function gate(){ if(S.win){showWin(S.win);return false} if(left()===0){showLocked();return false} return true }
+
+// ---- welcome
+$("nameIn").value=S.name||"";
+function validStart(){$("startBtn").disabled=!$("nameIn").value.trim()}
+$("nameIn").oninput=validStart; validStart();
+$("startBtn").onclick=()=>{S.name=$("nameIn").value.trim(); save(); log("start"); if(gate()) go("sCats");};
+
+// ---- categories (grid + hamburger menu)
+const catKeys=Object.keys(CATS);
+$("catGrid").innerHTML=catKeys.map(c=>`<button class="cat" data-c="${c}"><span class="e">${catEmoji(c)}</span><b>${catName(c)}</b><small>${CATS[c].blurb}</small></button>`).join("");
+$("menuList").innerHTML=catKeys.map(c=>`<button class="menuitem" data-c="${c}"><span class="e">${catEmoji(c)}</span><span><b>${catName(c)}</b><small>${CATS[c].blurb}</small></span></button>`).join("");
+document.querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>pickCat(b.dataset.c, b.classList.contains("menuitem")?"menu":"grid"));
+$("menuBtn").onclick=()=>{ log("menu_open");document.querySelectorAll(".menuitem").forEach(m=>m.classList.toggle("sel",m.dataset.c===cat)); paintNav(); $("drawer").classList.add("on")};
+const closeMenu=()=>$("drawer").classList.remove("on");
+$("closeMenu").onclick=closeMenu; $("shade").onclick=closeMenu;
+
+function pickCat(c,source){
+  closeMenu(); log("category_selected",{category:c,source});
+  if(current==="sQuiz"){ $("leaveModal").classList.add("on"); pendingLeave=()=>{stopQuiz(); if(left()===0){showLocked();return} startLesson(c)}; return; }
+  if(!S.name){ go("sStart"); $("nameIn").focus(); return; }
+  if(!gate()) return;
+  startLesson(c);
+}
+
+// ---- lesson
+function startLesson(c){
+  if(c!==cat || !lesson){ cat=c; lesson=shuffle(CATS[c].keys).slice(0,SETTINGS.wordsPerLesson).map(k=>B[k]); }
+  li=0; lessonT0=Date.now(); $("lessonChip").textContent=CATS[c].label; log("lesson_start",{attempt:S.attempts+1});
+  $("lessonDots").innerHTML=lesson.map(()=>'<div class="dot"></div>').join("");
+  hist=hist.filter(x=>x!=="sLesson"&&x!=="sQuiz"); if(hist[hist.length-1]!=="sCats" && current!=="sCats") hist.push("sCats");
+  renderLesson(); go("sLesson", current!=="sLesson");
+}
+function renderLesson(){
+  const w=lesson[li];
+  $("lessonNum").textContent=`Step 2 of 3 · Word ${li+1} of ${lesson.length}`;
+  [...$("lessonDots").children].forEach((d,k)=>d.className="dot"+(k<li?" ok":k===li?" now":""));
+  $("lJp").textContent=w.jp; $("lRom").textContent=w.r; $("lMean").textContent=w.a; $("lFact").textContent=w.f;
+  const card=$("lessonCard"); card.style.animation="none"; void card.offsetWidth; card.style.animation="";
+  $("lPrev").disabled=li===0;
+  $("lNext").textContent= li===lesson.length-1 ? `I'm ready: start quiz (${left()} left)` : "Next word →";
+}
+$("lPrev").onclick=()=>{if(li>0){li--;renderLesson()}};
+$("lNext").onclick=()=>{ if(li<lesson.length-1){li++;renderLesson()} else { log("lesson_completed",{seconds:Math.round((Date.now()-lessonT0)/1000)}); startQuiz(); } };
+
+// ---- quiz
+function startQuiz(){
+  if(!gate()) return;
+  S.attempts++; save();                       // a chance is used as soon as the quiz starts
+  game={cat, qs:shuffle(lesson).slice(0,SETTINGS.questionsPerGame), i:0, score:0, marks:[], attempt:S.attempts};
+  $("catChip").textContent=CATS[cat].label; $("tryChip").textContent=`Chance ${game.attempt} of ${SETTINGS.maxAttempts}`;
+  $("dots").innerHTML=game.qs.map(()=>'<div class="dot"></div>').join("");
+  log("quiz_start",{attempt:game.attempt});
+  go("sQuiz"); renderQ();
+}
+function stopQuiz(){clearInterval(tick); game=null;}
+function renderQ(){
+  const q=game.qs[game.i], n=game.qs.length;
+  [...$("dots").children].forEach((d,k)=>{d.className="dot"+(k<game.i?(game.marks[k]?" ok":" no"):k===game.i?" now":"")});
+  $("qnum").textContent=`Step 3 of 3 · Question ${game.i+1} of ${n}`;
+  $("qjp").textContent=q.jp; $("qrom").textContent=q.r; $("qtext").textContent=q.q;
+  $("fact").className="fact"; $("nextBtn").style.display="none"; $("opts").innerHTML="";
+  shuffle([q.a,...q.w]).forEach(t=>{const b=document.createElement("button");b.className="opt";b.textContent=t;b.onclick=()=>answer(t);$("opts").appendChild(b)});
+  let s=SETTINGS.secondsPerQuestion; const tEl=$("timer"); const paint=()=>{tEl.textContent=s+"s";tEl.className="timer"+(s<=5?" low":"")};
+  paint(); qT0=Date.now(); clearInterval(tick); tick=setInterval(()=>{s--;paint();if(s<=0){clearInterval(tick);answer(null)}},1000);
+}
+function answer(choice){
+  clearInterval(tick); if(!game) return;
+  const q=game.qs[game.i], ok=choice===q.a; game.marks.push(ok); if(ok) game.score++;
+  log("answer",{attempt:game.attempt,word:q.r,correct:ok?1:0,seconds:Math.round((Date.now()-qT0)/100)/10,source:choice===null?"timeout":"click"});
+  [...$("opts").children].forEach(b=>{b.disabled=true; if(b.textContent===q.a) b.classList.add("right"); else if(b.textContent===choice) b.classList.add("wrong")});
+  $("fact").innerHTML=(ok?"<b>✓ Correct!</b> ":choice===null?"<b>⏱ Time's up!</b> ":"<b>✗ Not quite.</b> ")+q.f; $("fact").className="fact on";
+  $("nextBtn").textContent=game.i===game.qs.length-1?"See my result →":"Next →"; $("nextBtn").style.display="block";
+}
+$("nextBtn").onclick=()=>{game.i++; game.i<game.qs.length?renderQ():finish()};
+function finish(){
+  const win=game.score>=SETTINGS.winScore;
+  const rec={cat:game.cat,name:S.name,score:game.score,total:game.qs.length,wonAt:Date.now(),redeemed:false,
+    learnt:game.qs.map(q=>({jp:q.jp,r:q.r,a:q.a}))};
+  log("quiz_finish",{attempt:game.attempt,score:game.score,win:win?1:0});
+  S.last=rec; if(win) S.win=rec; save(); game=null; hist=[];
+  if(win) showWin(rec); else if(left()===0) showLocked(); else showLose(rec);
+}
+const learntHTML=rec=>(rec&&rec.learnt||[]).map(l=>`<div class="opt" style="cursor:default"><span style="font-family:'Noto Sans JP';font-weight:700">${l.jp}</span> · <b style="color:var(--orange)">${l.r}</b><br><span style="color:var(--muted);font-size:15px">${l.a}</span></div>`).join("");
+function showLose(rec){
+  $("loseScore").textContent=`${rec.score}/${rec.total}`;
+  $("loseAttempts").textContent=`${left()} chance left. Review the lesson and try again!`;
+  $("learnt").innerHTML=learntHTML(rec); hist=["sCats"]; go("sLose",false); placeFb("sLose");
+}
+$("retryBtn").onclick=()=>{ log("retry_click"); if(gate()) startLesson(cat||S.last.cat); };
+function showLocked(){ $("learnt2").innerHTML=learntHTML(S.last); hist=[]; go("sLocked",false); placeFb("sLocked"); }
+function showWin(rec){
+  $("winScore").textContent=`${rec.score}/${rec.total}`; $("ticketPrize").textContent=SETTINGS.rewardTitle;
+  $("ticketCode").textContent=dailyCode(S.date);
+  $("tName").textContent=rec.name; $("tTable").textContent=catEmoji(rec.cat)+" "+catName(rec.cat);
+  $("tWon").textContent=fmtTime(new Date(rec.wonAt)).slice(0,5)+" · "+fmtDate(new Date(rec.wonAt));
+  $("fine").textContent=SETTINGS.rewardSmall;
+  $("ticket").classList.toggle("used",!!rec.redeemed); $("redeemBtn").style.display=rec.redeemed?"none":"block";
+  clearInterval(liveTick); const u=()=>$("tNow").textContent=fmtTime(new Date()); u(); liveTick=setInterval(u,1000);
+  hist=[]; go("sWin",false); placeFb("sWin");
+}
+
+// ---- feedback ("is it fun?")
+let fbRating=0;
+function placeFb(screenId){ const fb=$("fb"); if(S.fbDone){fb.style.display="none";return} fb.style.display="block"; $(screenId).appendChild(fb); }
+document.querySelectorAll("#fbRate button").forEach(b=>b.onclick=()=>{
+  fbRating=+b.dataset.r; document.querySelectorAll("#fbRate button").forEach(x=>x.classList.toggle("sel",x===b));
+  $("fbMore").style.display="block";
+  if(!S.fbRated){ S.fbRated=true; save(); log("rating",{rating:fbRating,category:(S.last&&S.last.cat)||cat||""}); }
+});
+$("fbSend").onclick=()=>{ const txt=$("fbText").value.trim();
+  log("feedback",{rating:fbRating,comment:txt,category:(S.last&&S.last.cat)||cat||""});
+  S.fbDone=true; save(); $("fbRate").style.display="none"; $("fbMore").style.display="none"; $("fbThanks").style.display="block"; };
+
+// ---- staff
+let pinAction=null;
+function askPin(t,m,a){$("pinTitle").textContent=t;$("pinMsg").textContent=m;$("pinIn").value="";$("pinErr").textContent="";pinAction=a;$("pinModal").classList.add("on");setTimeout(()=>$("pinIn").focus(),50)}
+$("pinCancel").onclick=()=>$("pinModal").classList.remove("on");
+$("pinOk").onclick=()=>{ if($("pinIn").value===SETTINGS.staffPin){$("pinModal").classList.remove("on");pinAction&&pinAction()}
+  else{$("pinErr").textContent="Wrong PIN";$("pinCard").classList.remove("shake");void $("pinCard").offsetWidth;$("pinCard").classList.add("shake")} };
+$("pinIn").onkeydown=e=>{if(e.key==="Enter")$("pinOk").click()};
+$("redeemBtn").onclick=()=>askPin("Redeem reward","Server: enter the staff PIN after applying the discount on the till.",()=>{
+  if(S.win){S.win.redeemed=true;S.win.redeemedAt=Date.now();save();log("redeemed",{category:S.win.cat});showWin(S.win)} });
+$("staffLink").onclick=()=>askPin("Staff only","Enter the staff PIN to see today's code.",()=>{$("staffCode").textContent=dailyCode(todayKey());$("staffModal").classList.add("on")});
+$("staffClose").onclick=()=>$("staffModal").classList.remove("on");
+$("resetBtn").onclick=()=>{store.del(KEY);S=load();cat=null;lesson=null;game=null;hist=[];clearInterval(liveTick);clearInterval(tick);
+  $("staffModal").classList.remove("on");$("nameIn").value="";validStart();go("sStart",false)};
+
+// ---- on load: returning phone goes straight to its state
+log("app_open",{source:document.referrer?"link":"qr_or_direct"});
+if(S.win) showWin(S.win); else if(left()===0) showLocked(); else paintNav();
+</script>
+</body>
+</html>
